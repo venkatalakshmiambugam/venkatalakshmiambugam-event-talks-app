@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BigQuery Release Notes Tracker & Tweeter</title>
+    <meta name="description" content="A beautiful and modern web application to track Google Cloud BigQuery release notes, filter updates, and easily tweet about them.">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Stylesheet -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar / Header Area -->
+        <header class="app-header">
+            <div class="logo-area">
+                <div class="logo-icon">
+                    <i class="fa-solid fa-database"></i>
+                </div>
+                <div class="logo-text">
+                    <h1>BigQuery</h1>
+                    <span class="subtitle">Release Notes Hub</span>
+                </div>
+            </div>
+            
+            <div class="header-actions">
+                <span id="last-updated-text" class="last-updated">Last updated: Never</span>
+                <button id="refresh-btn" class="btn btn-primary btn-refresh" title="Refresh Release Notes">
+                    <i class="fa-solid fa-rotate-right spinner-icon"></i>
+                    <span>Refresh</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Dashboard Grid -->
+        <main class="dashboard-grid">
+            <!-- Left Column: Feed Viewer -->
+            <section class="feed-section" aria-label="BigQuery Feed">
+                <!-- Search & Filters -->
+                <div class="filter-panel">
+                    <div class="search-box">
+                        <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                        <input type="text" id="search-input" placeholder="Search updates (e.g. Gemini, partition, performance)...">
+                        <button id="clear-search-btn" class="clear-search" style="display: none;">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+                    
+                    <div class="filter-tags" id="type-filters" role="group" aria-label="Filter by type">
+                        <button class="filter-pill active" data-type="all">All Updates</button>
+                        <button class="filter-pill" data-type="feature"><span class="dot dot-feature"></span>Features</button>
+                        <button class="filter-pill" data-type="issue"><span class="dot dot-issue"></span>Issues</button>
+                        <button class="filter-pill" data-type="changed"><span class="dot dot-changed"></span>Changes</button>
+                        <button class="filter-pill" data-type="deprecated"><span class="dot dot-deprecated"></span>Deprecations</button>
+                    </div>
+                </div>
+
+                <!-- Feed Content -->
+                <div class="feed-container" id="feed-container">
+                    <!-- Loading State -->
+                    <div class="loading-state" id="feed-loading">
+                        <div class="loader"></div>
+                        <p>Fetching the latest release notes from Google Cloud...</p>
+                    </div>
+
+                    <!-- Error State -->
+                    <div class="error-state" id="feed-error" style="display: none;">
+                        <i class="fa-solid fa-triangle-exclamation error-icon"></i>
+                        <h3>Failed to fetch release notes</h3>
+                        <p id="error-message">Unknown error occurred. Please check your internet connection and try again.</p>
+                        <button id="retry-btn" class="btn btn-secondary">
+                            <i class="fa-solid fa-arrows-rotate"></i> Retry
+                        </button>
+                    </div>
+
+                    <!-- Empty State -->
+                    <div class="empty-state" id="feed-empty" style="display: none;">
+                        <i class="fa-solid fa-magnifying-glass-chart empty-icon"></i>
+                        <h3>No updates found</h3>
+                        <p>Try adjusting your filters or search keywords.</p>
+                    </div>
+
+                    <!-- Feed List (Populated via JS) -->
+                    <div class="feed-list" id="feed-list" style="display: none;"></div>
+                </div>
+            </section>
+
+            <!-- Right Column: Tweet Panel -->
+            <section class="tweet-section" aria-label="Tweet Composer">
+                <!-- Tweet Composer -->
+                <div class="card composer-card">
+                    <div class="card-header">
+                        <h2><i class="fa-brands fa-x-twitter"></i> Tweet Composer</h2>
+                        <span class="badge badge-composer" id="composer-status">Draft</span>
+                    </div>
+                    
+                    <div class="card-body">
+                        <!-- Active Selected Note Info -->
+                        <div class="selected-note-display" id="selected-note-display">
+                            <div class="no-selection-msg" id="no-selection-msg">
+                                <i class="fa-solid fa-arrow-left animate-bounce-left"></i>
+                                <span>Select a specific update from the feed to draft a tweet.</span>
+                            </div>
+                            <div class="selection-details" id="selection-details" style="display: none;">
+                                <div class="selection-meta">
+                                    <span class="selection-date" id="selected-date">June 15, 2026</span>
+                                    <span class="selection-type-badge" id="selected-type">Feature</span>
+                                </div>
+                                <p class="selection-preview" id="selected-preview">Preview text goes here...</p>
+                            </div>
+                        </div>
+
+                        <!-- Tweet Content Textarea -->
+                        <div class="tweet-input-wrapper">
+                            <textarea id="tweet-textarea" placeholder="Select an update or write your tweet here..." maxlength="500" disabled></textarea>
+                            
+                            <div class="character-progress">
+                                <span id="char-count">0</span> / <span class="max-chars">280</span>
+                                <div class="progress-bar-container">
+                                    <div class="progress-bar" id="char-progress-bar"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Style Presets -->
+                        <div class="style-presets-container">
+                            <label for="style-preset-select">Tweet Style:</label>
+                            <div class="style-preset-selector">
+                                <select id="style-preset-select" disabled>
+                                    <option value="excited">⚡ Excited & Engaging (Emojis)</option>
+                                    <option value="professional" selected>💼 Professional & Informative</option>
+                                    <option value="brief">🔍 Direct & Brief</option>
+                                    <option value="techie">💻 Developer-focused (Tags)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="composer-actions">
+                            <button id="tweet-intent-btn" class="btn btn-twitter w-full" disabled>
+                                <i class="fa-brands fa-x-twitter"></i> Tweet on X
+                            </button>
+                            <button id="log-tweet-btn" class="btn btn-secondary w-full" disabled>
+                                <i class="fa-solid fa-bookmark"></i> Save Draft
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tweet Log / History -->
+                <div class="card history-card">
+                    <div class="card-header">
+                        <h2><i class="fa-solid fa-clock-rotate-left"></i> Session Tweet Log</h2>
+                        <span class="count-badge" id="log-count">0</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="log-empty-msg" id="log-empty-msg">
+                            <p>No tweets logged in this session yet.</p>
+                            <span class="small-text">Tweets you save will appear here for easy copy/access.</span>
+                        </div>
+                        <div class="log-list" id="log-list" style="display: none;"></div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Main JavaScript -->
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
